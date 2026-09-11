@@ -8,6 +8,15 @@
 </head>
 <body class="bg-light">
     <div class="container py-4">
+        <!-- En-tête utilisateur -->
+        <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-white rounded shadow-sm">
+            <span class="fw-bold fs-5">Bienvenue, {{ user.username }} !</span>
+            <form action="{% url 'logout' %}" method="post" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger btn-sm">Se déconnecter</button>
+            </form>
+        </div>
+
         <h1 class="mb-4 text-center">Tableau de Bord - Gestion de Stock</h1>
 
         {% if messages %}
@@ -34,7 +43,17 @@
             <!-- Liste des stocks -->
             <div class="col-md-8">
                 <div class="card shadow-sm">
-                    <div class="card-header bg-dark text-white">État des Stocks</div>
+                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <span class="mb-0">État des Stocks</span>
+    <div>
+        <a href="{% url 'exporter_excel' %}" class="btn btn-success btn-sm me-2">
+            📊 Excel
+        </a>
+        <a href="{% url 'exporter_pdf' %}" class="btn btn-danger btn-sm">
+            📄 PDF
+        </a>
+    </div>
+</div>
                     <div class="card-body">
                         <table class="table table-striped align-middle">
                             <thead>
