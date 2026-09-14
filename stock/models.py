@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 
 class Categorie(models.Model):
     nom = models.CharField(max_length=100)
@@ -40,13 +41,32 @@ class MouvementStock(models.Model):
     )
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE, related_name='mouvements')
     type_mouvement = models.CharField(max_length=10, choices=TYPE_MOUVEMENT)
-    quantite = models.IntegerField()
+    quantite = models.PositiveIntegerField()  # Empêche les quantités négatives
     date = models.DateTimeField(auto_now_add=True)
     effectue_par = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     remarque = models.TextField(blank=True, null=True)
 
+    def clean(self):
+        super().clean()
+        # 1. Vérification que la quantité est strictement supérieure à zero
+        if self.quantite is not None and self.quantite <= 0:
+            raise ValidationError({
+                'quantite': "La quantité doit être supérieure à zéro."
+            })
+
+        # 2. Vérification du stock disponible en cas de sortie
+        if self.type_mouvement == 'SORTIE' and self.produit_id:
+            if self.quantite > self.produit.quantite_stock:
+                raise ValidationError({
+                    'quantite': f"Stock insuffisant pour '{self.produit.nom}'. "
+                                f"Stock disponible : {self.produit.quantite_stock}, quantité demandée : {self.quantite}."
+                })
+
     def save(self, *args, **kwargs):
-        # Mise à jour automatique du stock
+        # Exécute la méthode clean() pour forcer le contrôle de validation
+        self.full_clean()
+
+        # Mise à jour du stock seulement après validation
         if self.type_mouvement == 'ENTREE':
             self.produit.quantite_stock += self.quantite
         elif self.type_mouvement == 'SORTIE':
