@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Reçu Vente #{{ vente.id }}</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            width: 80mm; /* Largeur standard pour imprimante ticket / caisse */
+            margin: 0 auto;
+            padding: 10px;
+            color: #000;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .entete { margin-bottom: 15px; }
+        .details { margin-bottom: 10px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { border-bottom: 1px dashed #000; text-align: left; }
+        td { padding: 4px 0; }
+        .total-section { border-top: 1px dashed #000; margin-top: 10px; padding-top: 5px; font-weight: bold; }
+        
+        /* Cacher les boutons lors de l'impression sur papier */
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="margin-bottom: 15px; text-align: center;">
+        <button onclick="window.print()" style="padding: 8px 15px; cursor: pointer;">🖨️ Imprimer le reçu</button>
+    </div>
+
+    <div class="entete text-center">
+        <h2>MON MAGASIN</h2>
+        <p>Gestion de Stock & Vente</p>
+        <p>Tél: +223 00 00 00 00</p>
+    </div>
+
+    <div class="details">
+        <p><strong>N° Vente :</strong> #{{ vente.id }}</p>
+        <p><strong>Date :</strong> {{ vente.date_vente|date:"d/m/Y H:i" }}</p>
+        <p><strong>Client :</strong> {% if vente.client %}{{ vente.client.nom }}{% else %}Client de passage{% endif %}</p>
+        <p><strong>Vendeur :</strong> {% if vente.vendeur %}{{ vente.vendeur.get_full_name|default:vente.vendeur.username }}{% else %}-{% endif %}</p>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Article</th>
+                <th class="text-center">Qté</th>
+                <th class="text-right">P.U</th>
+                <th class="text-right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ligne in vente.lignes.all %}
+            <tr>
+                <td>{{ ligne.produit.nom }}</td>
+                <td class="text-center">{{ ligne.quantite }}</td>
+                <td class="text-right">{{ ligne.prix_unitaire }}</td>
+                <td class="text-right">{% widthratio ligne.quantite 1 ligne.prix_unitaire %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total-section text-right">
+        <p>TOTAL : {{ vente.total }} FCFA</p>
+        <p>Statut : {{ vente.get_statut_display }}</p>
+    </div>
+
+    <div class="text-center" style="margin-top: 20px; font-size: 11px;">
+        <p>Merci pour votre visite !</p>
+        <p>À bientôt.</p>
+    </div>
+
+</body>
+</html>

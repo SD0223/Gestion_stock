@@ -14,6 +14,14 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from .models import Produit, MouvementStock
 from .forms import MouvementStockForm
 
+from django.shortcuts import render, get_object_or_404
+from django.contrib.admin.views.decorators import staff_member_required
+from .models import Vente
+
+@staff_member_required
+def imprimer_recu(request, vente_id):
+    vente = get_object_or_404(Vente, id=vente_id)
+    return render(request, 'stock/recu.html', {'vente': vente})
 
 @login_required
 def dashboard(request):
