@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reçu de Vente N°{{ vente.id }}</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            width: 300px;
+            margin: 0 auto;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .table th, .table td {
+            text-align: left;
+            padding: 4px 0;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .total {
+            border-top: 1px dashed #000;
+            margin-top: 10px;
+            padding-top: 10px;
+            font-weight: bold;
+        }
+        .no-print {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        /* Cacher les boutons lors de l'impression physique / PDF */
+        @media print {
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>MON MAGASIN</h2>
+        <p>Reçu N°: {{ vente.id }}</p>
+        <p>Date: {{ vente.date_vente|default:vente.created_at|date:"d/m/Y H:i" }}</p>
+        <p>Vendeur: {{ vente.vendeur.username }}</p>
+    </div>
+
+    <!-- Details de la vente (si vous utilisez une relation LigneVente) -->
+    {% if vente.lignes.all %}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Article</th>
+                <th>Qté</th>
+                <th class="text-right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ligne in vente.lignes.all %}
+            <tr>
+                <td>{{ ligne.produit.nom }}</td>
+                <td>{{ ligne.quantite }}</td>
+                <td class="text-right">{{ ligne.prix_total }} FCFA</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <div class="total">
+        <p class="text-right">TOTAL: {{ vente.total }} FCFA</p>
+    </div>
+
+    <p style="text-align: center; margin-top: 20px;">Merci de votre visite !</p>
+
+    <!-- Boutons d'action pour l'utilisateur -->
+    <div class="no-print">
+        <button onclick="window.print();" style="padding: 8px 15px; cursor: pointer;">
+            🖨️ Imprimer à nouveau
+        </button>
+        <a href="{% url 'pos_index' %}" style="margin-left: 10px; text-decoration: none;">
+            ← Retour au POS
+        </a>
+    </div>
+
+    <!-- Script JavaScript d'impression automatique -->
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            // Un court délai (100ms) permet de s'assurer que les styles CSS sont appliqués avant l'impression
+            setTimeout(() => {
+                window.print();
+            }, 100);
+        });
+    </script>
+</body>
+</html>

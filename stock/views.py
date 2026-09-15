@@ -121,7 +121,7 @@ def supprimer_du_panier(request, produit_id):
 
 @login_required
 def valider_vente(request):
-    """ Valide la vente : déduit le stock et enregistre les mouvements """
+    """ Valide la vente : déduit le stock, crée la Vente et redirige vers l'impression du reçu """
     panier = request.session.get('panier', {})
     if not panier:
         messages.warning(request, "Le panier est vide.")
@@ -129,12 +129,26 @@ def valider_vente(request):
 
     try:
         with transaction.atomic():
+            total_general = 0
+            produits_a_traiter = []
+
             for p_id, qte in panier.items():
                 produit = Produit.objects.select_for_update().get(id=p_id)
-                
                 if produit.quantite_stock < qte:
                     raise ValueError(f"Stock insuffisant pour {produit.nom}")
+                
+                total_ligne = produit.prix_vente * qte
+                total_general += total_ligne
+                produits_a_traiter.append((produit, qte))
 
+            # Création de l'enregistrement de Vente
+            nouvelle_vente = Vente.objects.create(
+                total=total_general,
+                vendeur=request.user
+            )
+
+            # Mise à jour des stocks et enregistrement des mouvements
+            for produit, qte in produits_a_traiter:
                 produit.quantite_stock -= qte
                 produit.save()
 
@@ -143,16 +157,18 @@ def valider_vente(request):
                     type_mouvement='SORTIE',
                     quantite=qte,
                     effectue_par=request.user,
-                    remarque="Vente au comptoir (POS)"
+                    remarque=f"Vente N°{nouvelle_vente.id} au comptoir"
                 )
 
+            # Nettoyage de la session
             request.session['panier'] = {}
-            messages.success(request, "Vente validée avec succès ! Stock mis à jour.")
+            messages.success(request, f"Vente N°{nouvelle_vente.id} enregistrée avec succès !")
+
+            return redirect('imprimer_recu', vente_id=nouvelle_vente.id)
 
     except Exception as e:
         messages.error(request, f"Erreur lors de la validation : {str(e)}")
-
-    return redirect('pos_index')
+        return redirect('pos_index')
 
 
 @login_required
