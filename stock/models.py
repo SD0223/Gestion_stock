@@ -55,14 +55,20 @@ class Vente(models.Model):
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='PAYE')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
+    def calculer_total(self):
+        # Calcule la somme (quantite * prix_unitaire) de chaque ligne liée à cette vente
+        total_calcule = sum(ligne.quantite * ligne.prix_unitaire for ligne in self.lignes.all())
+        self.total = total_calcule
+        super().save(update_fields=['total'])
+
     def __str__(self):
-        return f"Vente #{self.id} - {self.client if self.client else 'Client de passage'}"
+        return f"Vente #{self.id} - {self.client if self.client else 'Client de passage'} ({self.total} FCFA)"
 
 class LigneVente(models.Model):
     vente = models.ForeignKey(Vente, on_delete=models.CASCADE, related_name='lignes')
     produit = models.ForeignKey(Produit, on_delete=models.CASCADE)
     quantite = models.PositiveIntegerField(default=1)
-    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
     def clean(self):
         super().clean()
@@ -72,11 +78,21 @@ class LigneVente(models.Model):
             )
 
     def save(self, *args, **kwargs):
+        # Récupère automatiquement le prix de vente du produit si le champ est vide
+        if not self.prix_unitaire and self.produit_id:
+            self.prix_unitaire = self.produit.prix_vente
+
         self.full_clean()
+
+        # Déduit la quantité du stock lors de la création de la ligne
         if not self.pk:
             self.produit.quantite_stock -= self.quantite
             self.produit.save()
+
         super().save(*args, **kwargs)
+
+        # Recalcule le montant total sur la Vente parente
+        self.vente.calculer_total()
 
     def __str__(self):
         return f"{self.quantite} x {self.produit.nom}"
