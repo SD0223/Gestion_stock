@@ -3,62 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion de Stock</title>
+    <title>Tableau de Bord - Gestion de Stock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-    <div class="container py-4">
-        <!-- En-tête utilisateur -->
-        <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-white rounded shadow-sm">
-            <span class="fw-bold fs-5">Bienvenue, {{ user.username }} !</span>
-            <form action="{% url 'logout' %}" method="post" class="d-inline">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-outline-danger btn-sm">Se déconnecter</button>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">📦 Stock Manager</a>
+    <div class="d-flex align-items-center text-white">
+      Utilisateur : <strong class="ms-2 me-3">{{ user.username }}</strong>
+      <a href="{% url 'admin:logout' %}" class="btn btn-outline-light btn-sm">Déconnexion</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Section Recherche et Exports -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-center">
+                <div class="col-md-6">
+                    <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Rechercher un produit par nom...">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">🔍 Rechercher</button>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'exporter_excel' %}{% if query %}?q={{ query }}{% endif %}" class="btn btn-success me-1">📊 Excel</a>
+                    <a href="{% url 'exporter_pdf' %}{% if query %}?q={{ query }}{% endif %}" class="btn btn-danger">📄 PDF</a>
+                </div>
             </form>
         </div>
-
-        <h1 class="mb-4 text-center">Tableau de Bord - Gestion de Stock</h1>
-
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-success">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-
-        <div class="row mb-4">
-            <!-- Formulaire rapide d'entrée/sortie -->
-            <div class="col-md-4">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-primary text-white">Nouveau Mouvement</div>
-                    <div class="card-body">
-                        <form method="post">
-                            {% csrf_token %}
-                            {{ form.as_p }}
-                            <button type="submit" class="btn btn-success w-100">Enregistrer</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Liste des stocks -->
-            <div class="col-md-8">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-    <span class="mb-0">État des Stocks</span>
-    <div>
-        <a href="{% url 'exporter_excel' %}" class="btn btn-success btn-sm me-2">
-            📊 Excel
-        </a>
-        <a href="{% url 'exporter_pdf' %}" class="btn btn-danger btn-sm">
-            📄 PDF
-        </a>
     </div>
-</div>
-                    <div class="card-body">
-                        <table class="table table-striped align-middle">
-                            <thead>
+
+    <!-- Alertes de stock -->
+    {% if produits_alerte %}
+    <div class="alert alert-warning shadow-sm" role="alert">
+        <h5 class="alert-heading">⚠️ Produits en alerte de stock !</h5>
+        <ul class="mb-0">
+            {% for item in produits_alerte %}
+                <li><strong>{{ item.nom }}</strong> - Stock restant : <span class="badge bg-danger">{{ item.quantite_stock }}</span> (Seuil : {{ item.seuil_alerte }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Liste des Produits -->
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">État du Stock</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="table-dark">
                                 <tr>
-                                    <th>Produit</th>
+                                    <th>Code-barres</th>
+                                    <th>Nom</th>
                                     <th>Prix Vente</th>
                                     <th>Stock</th>
                                     <th>Statut</th>
@@ -67,16 +81,27 @@
                             <tbody>
                                 {% for p in produits %}
                                 <tr>
-                                    <td>{{ p.nom }}</td>
+                                    <td>{{ p.code_barre|default:"-" }}</td>
+                                    <td><strong>{{ p.nom }}</strong></td>
                                     <td>{{ p.prix_vente }} FCFA</td>
-                                    <td><strong>{{ p.quantite_stock }}</strong></td>
                                     <td>
                                         {% if p.quantite_stock <= p.seuil_alerte %}
-                                            <span class="badge bg-danger">Alerte Stock</span>
+                                            <span class="badge bg-danger">{{ p.quantite_stock }}</span>
                                         {% else %}
-                                            <span class="badge bg-success">OK</span>
+                                            <span class="badge bg-success">{{ p.quantite_stock }}</span>
                                         {% endif %}
                                     </td>
+                                    <td>
+                                        {% if p.quantite_stock <= p.seuil_alerte %}
+                                            <span class="text-danger font-weight-bold">Alerte</span>
+                                        {% else %}
+                                            <span class="text-success">OK</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-3">Aucun produit trouvé.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -85,6 +110,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Formulaire de Mouvement de Stock -->
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Nouveau Mouvement</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Produit</label>
+                            {{ form.produit }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Type de mouvement</label>
+                            {{ form.type_mouvement }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Quantité</label>
+                            {{ form.quantite }}
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Remarque</label>
+                            {{ form.remarque }}
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Enregistrer</button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

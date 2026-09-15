@@ -1,9 +1,10 @@
 import io
 import openpyxl
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import models
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db import models, transaction
 from django.http import HttpResponse, FileResponse
 
 from reportlab.lib.pagesizes import letter
@@ -11,17 +12,15 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-from .models import Produit, MouvementStock
+from .models import Produit, MouvementStock, Vente
 from .forms import MouvementStockForm
 
-from django.shortcuts import render, get_object_or_404
-from django.contrib.admin.views.decorators import staff_member_required
-from .models import Vente
 
 @staff_member_required
 def imprimer_recu(request, vente_id):
     vente = get_object_or_404(Vente, id=vente_id)
     return render(request, 'stock/recu.html', {'vente': vente})
+
 
 @login_required
 def dashboard(request):
@@ -54,6 +53,106 @@ def dashboard(request):
         'query': query,
     }
     return render(request, 'stock/dashboard.html', context)
+
+
+@login_required
+def pos_index(request):
+    """ Interface principale du Point de Vente """
+    query = request.GET.get('q', '')
+    if query:
+        produits = Produit.objects.filter(nom__icontains=query)
+    else:
+        produits = Produit.objects.all()
+
+    panier_session = request.session.get('panier', {})
+    panier_items = []
+    total_general = 0
+
+    for p_id, qte in panier_session.items():
+        try:
+            produit = Produit.objects.get(id=p_id)
+            total_ligne = produit.prix_vente * qte
+            total_general += total_ligne
+            panier_items.append({
+                'produit': produit,
+                'quantite': qte,
+                'total': total_ligne
+            })
+        except Produit.DoesNotExist:
+            continue
+
+    context = {
+        'produits': produits,
+        'panier': panier_items,
+        'total_general': total_general,
+        'query': query,
+    }
+    return render(request, 'stock/pos.html', context)
+
+
+@login_required
+def ajouter_au_panier(request, produit_id):
+    """ Ajoute un produit au panier temporaire (Session) """
+    produit = get_object_or_404(Produit, id=produit_id)
+    panier = request.session.get('panier', {})
+
+    qte_actuelle = panier.get(str(produit_id), 0)
+    
+    if qte_actuelle + 1 > produit.quantite_stock:
+        messages.error(request, f"Stock insuffisant pour {produit.nom} !")
+    else:
+        panier[str(produit_id)] = qte_actuelle + 1
+        request.session['panier'] = panier
+        messages.success(request, f"{produit.nom} ajouté au panier.")
+
+    return redirect('pos_index')
+
+
+@login_required
+def supprimer_du_panier(request, produit_id):
+    """ Retire un produit du panier """
+    panier = request.session.get('panier', {})
+    if str(produit_id) in panier:
+        del panier[str(produit_id)]
+        request.session['panier'] = panier
+        messages.info(request, "Article retiré du panier.")
+    return redirect('pos_index')
+
+
+@login_required
+def valider_vente(request):
+    """ Valide la vente : déduit le stock et enregistre les mouvements """
+    panier = request.session.get('panier', {})
+    if not panier:
+        messages.warning(request, "Le panier est vide.")
+        return redirect('pos_index')
+
+    try:
+        with transaction.atomic():
+            for p_id, qte in panier.items():
+                produit = Produit.objects.select_for_update().get(id=p_id)
+                
+                if produit.quantite_stock < qte:
+                    raise ValueError(f"Stock insuffisant pour {produit.nom}")
+
+                produit.quantite_stock -= qte
+                produit.save()
+
+                MouvementStock.objects.create(
+                    produit=produit,
+                    type_mouvement='SORTIE',
+                    quantite=qte,
+                    effectue_par=request.user,
+                    remarque="Vente au comptoir (POS)"
+                )
+
+            request.session['panier'] = {}
+            messages.success(request, "Vente validée avec succès ! Stock mis à jour.")
+
+    except Exception as e:
+        messages.error(request, f"Erreur lors de la validation : {str(e)}")
+
+    return redirect('pos_index')
 
 
 @login_required
